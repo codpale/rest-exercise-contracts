@@ -253,8 +253,8 @@ app.post('/balances/deposit/:userId', getProfile, async (req, res) => {
  * any contactor that worked in the query time range.
  * 
  * NOTE: add the validation of the dates format
- * IMPROVEMENTS: it can be improved splitting the code in sub-function for
- *               better readability
+ * IMPROVEMENT-1: it can be improved splitting the code in sub-function for
+ *                 better readability
  *
  * @returns the profession that earned the most mone
  */
@@ -314,6 +314,39 @@ app.get('/admin/best-profession', getProfile, async (req, res) => {
             return res.send({ profession: contractor.profession }).end()
         }
     }
+})
+
+/**
+ * Point 7
+ *
+ * GET /admin/best-clients?start=<date>&end=<date>&limit=<integer>
+ *
+ * Returns the clients the paid the most for jobs in the query time period.
+ * limit query parameter should be applied, default limit is 2.
+ *
+ * NOTE1: start date is included, but the end date is excluded.
+ *       It can be improved
+ * NOTE2: the results contain also the total amount paid by the client
+ *
+ * @returns the profession that earned the most mone
+ */
+ app.get('/admin/best-clients', getProfile, async (req, res) => {
+    const startDate = req.query.start
+    const endDate = req.query.end
+    const limit = req.query.limit || 2
+    const data = await sequelize.query(
+        `SELECT SUM(j.price) as totPaid, p.* FROM
+            Profiles p JOIN Contracts c JOIN Jobs j ON
+                c.ClientId = p.id AND j.ContractId = c.id
+            WHERE type = "client"
+                  AND paid IS NOT NULL
+                  AND j.paymentDate BETWEEN "${startDate}" AND "${endDate}"
+
+            GROUP by p.id
+            ORDER by totPaid desc
+            LIMIT ${limit}`
+    )
+    res.send(data[0]).end()
 })
 
 module.exports = app;
