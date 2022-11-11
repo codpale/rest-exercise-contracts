@@ -253,6 +253,8 @@ app.post('/balances/deposit/:userId', getProfile, async (req, res) => {
 
 /**
  * Point 6
+ * This point can be improved using the same solution of Point 7 (using JOINs).
+ * It is also possible to use the JOIN with Sequelize using the "include"
  *
  * GET /admin/best-profession?start=<date>&end=<date>
  *
@@ -263,7 +265,7 @@ app.post('/balances/deposit/:userId', getProfile, async (req, res) => {
  * IMPROVEMENT-1: it can be improved splitting the code in sub-function for
  *                 better readability
  *
- * @returns the profession that earned the most mone
+ * @returns the profession that earned the most money
  */
 app.get('/admin/best-profession', getProfile, async (req, res) => {
   const startDate = req.query.start;
