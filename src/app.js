@@ -201,7 +201,7 @@ app.get('/jobs/unpaid', getProfile, async (req, res) => {
  * @returns the status code of the operation
  */
 app.post('/balances/deposit/:userId', getProfile, async (req, res) => {
-    const { Profile, Contract, Job } = req.app.get('models')
+    const { Profile, Job } = req.app.get('models')
     const id = req.profile.id
     const userId = parseInt(req.params.userId)
     const amount = req.body.amount
@@ -242,6 +242,78 @@ app.post('/balances/deposit/:userId', getProfile, async (req, res) => {
         { where: { id: userId }
     })
     res.status(200).end()
+})
+
+/**
+ * Point 6
+ *
+ * GET /admin/best-profession?start=<date>&end=<date>
+ *
+ * Returns the profession that earned the most money (sum of jobs paid) for
+ * any contactor that worked in the query time range.
+ * 
+ * NOTE: add the validation of the dates format
+ * IMPROVEMENTS: it can be improved splitting the code in sub-function for
+ *               better readability
+ *
+ * @returns the profession that earned the most mone
+ */
+app.get('/admin/best-profession', getProfile, async (req, res) => {
+    const startDate = req.query.start
+    const endDate = req.query.end
+    // get all contractors
+    const { Profile, Contract, Job } = req.app.get('models')
+    const contractors = await Profile.findAll({
+        where: {
+            type: 'contractor'
+        }
+    })
+
+    let contracts
+    let contractIds
+    let contractorId
+    let maxPaidContractorId
+    let sumPaidJobsByContractId
+    let maxValue = Number.NEGATIVE_INFINITY
+    for (const el of contractors) {
+        contractorId = el.id
+        contracts = await Contract.findAll({ // for each contractor get all related contracts
+            where: {
+                ContractorId: contractorId
+            }
+        })
+        // calculate the sum of all paid jobs in the specified period related
+        // to all contracts of the current contractor and extract the contractor
+        // id with the maximum amount of paid jobs
+        contractIds = contracts.map(el => el.id)
+        sumPaidJobsByContractId = await Job.findOne({
+            where: {
+                [ Op.and]: [
+                    { Paid: { [ Op.not ]: null } },
+                    { ContractId: { [ Op.in ]: contractIds } },
+                    {
+                        paymentDate: {
+                            [Op.between]: [startDate, endDate]
+                        }
+                    }
+                ]
+            },
+            attributes: [
+                [ sequelize.fn('sum', sequelize.col('price')), 'total' ],
+            ]
+        })
+        sumPaidJobsByContractId = sumPaidJobsByContractId.dataValues.total
+        if (maxValue < sumPaidJobsByContractId) {
+            maxValue = sumPaidJobsByContractId
+            maxPaidContractorId = contractorId
+        }
+    }
+    // extract and send the profession of the contractor from the previous step
+    for (const contractor of contractors) {
+        if (contractor.id === maxPaidContractorId) {
+            return res.send({ profession: contractor.profession }).end()
+        }
+    }
 })
 
 module.exports = app;
