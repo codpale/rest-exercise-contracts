@@ -75,8 +75,8 @@ async function getAllActiveContracts(req) {
  *
  * @returns unpaid jobs of a user
  */
- app.get('/jobs/unpaid',getProfile ,async (req, res) =>{
-    const {Contract, Job} = req.app.get('models')
+app.get('/jobs/unpaid', getProfile, async (req, res) => {
+    const { Contract, Job } = req.app.get('models')
     const id = req.profile.id
     // get all active contracts of the user
     const contracts = await getAllActiveContracts(req)
@@ -157,31 +157,91 @@ async function getAllActiveContracts(req) {
             const client = await Profile.update(
                 { balance: (clientProfile.balance - jobToPay.price).toFixed(2) },
                 { where: { id: clientId }
-            }, { transaction: t });
+            }, { transaction: t })
 
             // update the balance of the contractor
             const contractor = await Profile.update(
                 { balance: (contractorProfile.balance + jobToPay.price).toFixed(2) },
                 { where: { id: contract.ContractorId }
-            }, { transaction: t });
+            }, { transaction: t })
 
             // update the job as paid
             const job = await Job.update(
                 { paid: 1 },
                 { where: { id: jobId }
-            }, { transaction: t });
+            }, { transaction: t })
 
             return {
                 client: client,
                 contractor: contractor,
                 job: job
-            };
-        });
+            }
+        })
         res.status(200).end()
     } catch (error) {
         console.error(error);
         res.status(500).end()
     }
+})
+
+/**
+ * Point 5
+ *
+ * POST /balances/deposit/:userId
+ *
+ * Deposits money into the balance of a client, a client can't deposit
+ * more than 25% his total of jobs to pay. (at the deposit moment)
+ *
+ * ASSUMPTION 1: only a client can use this API as from the rquirements
+ * ASSUMPTION 2: the deposit can be made only by the client owner
+ * ASSUMPTION 3: the amuont to be deposited is inside the body as a JSON
+ *               object: e.g. { "amount": 123.4 } the key is a string
+ *               and the amount is a number
+ *
+ * @returns the status code of the operation
+ */
+app.post('/balances/deposit/:userId', getProfile, async (req, res) => {
+    const { Profile, Contract, Job } = req.app.get('models')
+    const id = req.profile.id
+    const userId = parseInt(req.params.userId)
+    const amount = req.body.amount
+    // check if the requester client is the owner of the deposit
+    if (id !== userId) {
+        return res.status(403).end()
+    }
+    // check if the user is a client
+    const userProfile = await Profile.findOne({ where: { id: userId }})
+    if (userProfile.type !== 'client') {
+        return res.status(403).end()
+    }
+    // get the total sum of all unpaid jobs of the client
+    const contracts = await getAllActiveContracts(req)
+    const contractIds = contracts.map(el => el.id)
+    const totalRes = await Job.findAll({
+        where: {
+            [Op.and]: [
+                { Paid: { [Op.is]: null } },
+                { ContractId: { [Op.in]: contractIds } }
+            ]
+        },
+        attributes: [
+            [sequelize.fn('sum', sequelize.col('price')), 'total'],
+        ]
+    })
+    let total = 0
+    if (totalRes.length > 0) {
+        total = totalRes[0].dataValues.total
+    }
+    // check if the amount to be deposit is <= to the 25% of the total unpaid
+    if (amount > (total / 100 * 25)) {
+        return res.status(403).send({ error: 'deposit is greater than 25% of total unpaid: not allowed' }).end()
+    }
+    // deposit the amount
+    await Profile.update(
+        { balance: (userProfile.balance + amount).toFixed(2) },
+        { where: { id: userId }
+    })
+    res.status(200).end()
 })
 
 module.exports = app;
