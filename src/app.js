@@ -8,7 +8,13 @@ app.set('sequelize', sequelize)
 app.set('models', sequelize.models)
 
 /**
- * FIX ME!
+ * Point 1
+ * FIXED
+ *
+ * Returns the data about the requested contract. It returns data
+ * only if the requested contract belong to the profile who made
+ * the request.
+ *
  * @returns contract by id
  */
 app.get('/contracts/:id',getProfile ,async (req, res) =>{
@@ -16,6 +22,12 @@ app.get('/contracts/:id',getProfile ,async (req, res) =>{
     const {id} = req.params
     const contract = await Contract.findOne({where: {id}})
     if(!contract) return res.status(404).end()
+    // Point 1
+    // authorization check: the requested contract id must matches the profile_id of the HTTP header
+    if (req.profile.id !== contract.id) {
+        res.status(403).end()
+        return
+    }
     res.json(contract)
 })
 module.exports = app;
