@@ -43,6 +43,16 @@ app.get('/contracts/:id',getProfile ,async (req, res) =>{
  * @returns active contracts of a user profile
  */
  app.get('/contracts',getProfile ,async (req, res) =>{
+    res.json(await getAllActiveContracts(req))
+})
+
+/**
+ * Gets a list of active contracts belonging to a user
+ * (client or contractor) from the database.
+ *
+ * @returns active contracts of a user profile
+ */
+async function getAllActiveContracts(req) {
     const {Contract} = req.app.get('models')
     const id = req.profile.id
     const contracts = await Contract.findAll({
@@ -53,6 +63,34 @@ app.get('/contracts/:id',getProfile ,async (req, res) =>{
             ]
         }
     })
-    res.json(contracts)
+    return contracts
+}
+
+/**
+ * Point 3
+ *
+ * GET /jobs/unpaid
+ *
+ * Returns all unpaid jobs for a user (either a client or contractor), for active contracts only.
+ *
+ * @returns unpaid jobs of a user
+ */
+ app.get('/jobs/unpaid',getProfile ,async (req, res) =>{
+    const {Contract, Job} = req.app.get('models')
+    const id = req.profile.id
+    // get all active contracts of the user
+    const contracts = await getAllActiveContracts(req)
+    // construct the list of active contract ids of the user
+    const contractIds = contracts.map(el => el.id)
+    // get all unpaid jobs of all user's contracts
+    const unpaidJobs = await Job.findAll({
+        where: {
+            [Op.and]: [
+                {Paid: {[Op.is]: null}},
+                {ContractId: {[Op.in]: contractIds}}
+            ]
+        }
+    })
+    res.json(unpaidJobs)
 })
 module.exports = app;
